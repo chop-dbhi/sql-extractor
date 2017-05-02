@@ -1,0 +1,38 @@
+# SQL agent connection info.
+sqlagent:
+  addr: http://sqlagent:5000
+
+# Databases connection info
+connections:
+  db:
+    driver: postgres
+    info:
+      user: user1
+      password: s3cret
+      database: test
+      host: example
+      port: 5432
+
+# Format of the data when written to files.
+format: csv
+gzip: true
+
+# Local filesystem cache directory to write the files
+# prior to copying them to their destination.
+cache: /tmp
+
+schedule:
+  # Every hour
+  cron: 0 0 * * * *
+
+# Config for S3 target destination.
+s3:
+  access_key_id: ...
+  secret_access_key: ...
+  region: us-east-1
+  bucket: data
+  basedir: /
+
+queries:
+  - connection: db
+    file: /queries/test.sql

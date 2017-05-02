@@ -1,0 +1,20 @@
+version: "2"
+
+services:
+  sqlagent:
+    image: dbhi/sql-agent
+    restart: always
+
+  extractor:
+    image: dbhi/extractor
+
+    depends_on:
+      - sqlagent
+
+    ports:
+      - 8080:8080
+
+    volumes:
+      - ./queries:/queries
+      - ./conf:/conf
+      - ./data:/data

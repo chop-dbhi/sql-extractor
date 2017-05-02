@@ -5,8 +5,8 @@ services:
     image: dbhi/sql-agent
     restart: always
 
-  extractor:
-    image: dbhi/extractor
+  sqlextractor:
+    image: dbhi/sql-extractor
 
     depends_on:
       - sqlagent

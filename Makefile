@@ -1,5 +1,5 @@
-IMAGE_NAME := dbhi/extractor
-PROG_NAME := extractor
+IMAGE_NAME := dbhi/sql-extractor
+PROG_NAME := sql-extractor
 
 GIT_SHA := $(or $(shell git log -1 --pretty=format:"%h" .), "latest")
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)

@@ -36,3 +36,6 @@ s3:
 queries:
   - connection: db
     file: /queries/test.sql
+  - connection: db
+    sql: >
+      select 1 from dual

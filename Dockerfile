@@ -5,5 +5,8 @@ RUN apk add --no-cache ca-certificates
 COPY ./dist/linux-amd64/sql-extractor /
 
 VOLUME ["/queries"]
+VOLUME ["/data"]
 
-CMD ["/sql-extractor", "/conf/config.yml"]
+ENTRYPOINT ["/sql-extractor"]
+
+CMD ["/config.yml"]

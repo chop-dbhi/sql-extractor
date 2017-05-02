@@ -1,4 +1,4 @@
-memo = "f537dc70a37c8112ab194e3e51f1a77de567377fc2c45c18f9ac15d819c1fa86"
+memo = "aad8d601e71c10bd4008af2b37ac855370e74c502da02ddc440c6efc9dd5d893"
 
 [[projects]]
   name = "github.com/aws/aws-sdk-go"
@@ -19,10 +19,9 @@ memo = "f537dc70a37c8112ab194e3e51f1a77de567377fc2c45c18f9ac15d819c1fa86"
   version = "0.2.2"
 
 [[projects]]
-  branch = "master"
   name = "github.com/robfig/cron"
   packages = ["."]
-  revision = "e4280929dd5d1064616a07bc7912264525e845e5"
+  revision = "df38d32658d8788cd446ba74db4bb5375c4b0cb3"
 
 [[projects]]
   branch = "master"

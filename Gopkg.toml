@@ -4,8 +4,8 @@
   version = "^1.8.19"
 
 [[dependencies]]
-  branch = "master"
   name = "github.com/robfig/cron"
+  revision = "df38d32658d8788cd446ba74db4bb5375c4b0cb3"
 
 [[dependencies]]
   branch = "master"

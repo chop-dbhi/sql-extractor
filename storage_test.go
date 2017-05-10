@@ -20,6 +20,8 @@ func stringExists(a []string, x string) bool {
 func TestS3Storage(t *testing.T) {
 	accessKeyID := os.Getenv("AWS_AKI")
 	secretAccessKey := os.Getenv("AWS_SAK")
+	region := os.Getenv("AWS_REGION")
+	bucket := os.Getenv("AWS_BUCKET")
 
 	if accessKeyID == "" || secretAccessKey == "" {
 		t.Skip("AWS_AKI or AWS_SAK not present")
@@ -28,8 +30,8 @@ func TestS3Storage(t *testing.T) {
 	s3 := &S3Storage{
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secretAccessKey,
-		Region:          "us-east-1",
-		Bucket:          "appres-libi",
+		Region:          region,
+		Bucket:          bucket,
 	}
 
 	if err := s3.Auth(); err != nil {

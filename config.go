@@ -52,9 +52,6 @@ type QueryConfig struct {
 
 	// Name of the query. This only applies if File is used.
 	Name string
-
-	// Output directory for all queries.
-	OutDir string
 }
 
 type Query struct {
@@ -65,8 +62,6 @@ type Query struct {
 
 	// File containing the query.
 	File string
-
-	OutDir string
 
 	// The SQL string to be executed.
 	SQL string
@@ -178,10 +173,6 @@ func (c *Config) ReadQueries() ([]*Query, error) {
 
 			// Ensure a repo is
 			for _, q := range x {
-				if qc.OutDir != "" {
-					q.OutDir = qc.OutDir
-				}
-
 				q.Connection = conn
 				q.ScheduleTime = scheduleTime
 				queries = append(queries, q)
@@ -194,10 +185,6 @@ func (c *Config) ReadQueries() ([]*Query, error) {
 
 			if qc.Name != "" {
 				q.Name = qc.Name
-			}
-
-			if qc.OutDir != "" {
-				q.OutDir = qc.OutDir
 			}
 
 			q.Connection = conn

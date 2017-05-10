@@ -23,6 +23,8 @@ import (
 const DirPerm = 0775
 
 var (
+	CacheDirTimeFormat = "2006/01/02/15-04-05"
+
 	RetryAttempts = 5
 
 	ErrMaxRetriesReached = errors.New("exceeded retry limit")
@@ -66,10 +68,13 @@ func Schedule(cxt context.Context, config *Config, queries []*Query) error {
 	wg.Add(len(queries))
 
 	// Timestamp of scheduled execution.
-	now := time.Now().Format(time.RFC3339)
-	cacheDir := filepath.Join(config.Cache.Path, now)
+	now := time.Now()
 
-	if err := os.Mkdir(cacheDir, DirPerm); err != nil {
+	// Relative path the files will be written.
+	timePath := now.Format(CacheDirTimeFormat)
+
+	cacheDir := filepath.Join(config.Cache.Path, timePath)
+	if err := os.MkdirAll(cacheDir, DirPerm); err != nil {
 		return err
 	}
 
@@ -91,8 +96,7 @@ func Schedule(cxt context.Context, config *Config, queries []*Query) error {
 
 					// File to write to.
 					ext := fmt.Sprintf("%s.gz", config.Format)
-					outFile := fmt.Sprintf("%s.%s", filepath.Join(q.OutDir, now, q.Name), ext)
-
+					outFile := fmt.Sprintf("%s.%s", filepath.Join(timePath, q.Name), ext)
 					cacheFile := filepath.Join(config.Cache.Path, outFile)
 
 					log.Printf("Executing %s...", q.Name)

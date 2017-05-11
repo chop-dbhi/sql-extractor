@@ -59,7 +59,9 @@ func main() {
 	// No schedule, one-off invocation.
 	if config.Schedule.Cron == "" {
 		log.Printf("No schedule specified, running one extract")
-		Schedule(cxt, config, queries)
+		if err := Schedule(cxt, config, queries); err != nil {
+			log.Print(err)
+		}
 		done()
 	} else {
 		log.Printf("Schedule found: %s", config.Schedule.Cron)

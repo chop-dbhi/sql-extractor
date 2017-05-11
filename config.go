@@ -50,7 +50,9 @@ type QueryConfig struct {
 	// Single file containing a query.
 	File string
 
-	// Name of the query. This only applies if File is used.
+	SQL string
+
+	// Name of the query. This only applies if SQL or File is set.
 	Name string
 }
 
@@ -189,6 +191,19 @@ func (c *Config) ReadQueries() ([]*Query, error) {
 
 			q.Connection = conn
 			q.ScheduleTime = scheduleTime
+			queries = append(queries, q)
+		} else if qc.SQL != "" {
+			if qc.Name == "" {
+				return nil, errors.New("name required for inline SQL")
+			}
+
+			q := &Query{
+				Name:         qc.Name,
+				SQL:          qc.SQL,
+				Connection:   conn,
+				ScheduleTime: scheduleTime,
+			}
+
 			queries = append(queries, q)
 		} else {
 			log.Printf("warn: Query config does not have `dir` or `file` set")

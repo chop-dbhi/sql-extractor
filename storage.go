@@ -21,7 +21,7 @@ type S3Storage struct {
 	svc *s3.S3
 }
 
-func (s *S3Storage) Put(path string, r io.ReadSeeker) error {
+func (s *S3Storage) Put(path string, r io.ReadSeeker) (string, string, error) {
 	path = filepath.Join(s.BaseDir, path)
 	encrypt := "AES256"
 
@@ -34,57 +34,7 @@ func (s *S3Storage) Put(path string, r io.ReadSeeker) error {
 
 	// TODO: log response?
 	_, err := s.svc.PutObject(p)
-	return err
-}
-
-func (s *S3Storage) Delete(path string) error {
-	path = filepath.Join(s.BaseDir, path)
-
-	p := &s3.DeleteObjectInput{
-		Bucket: aws.String(s.Bucket),
-		Key:    aws.String(path),
-	}
-
-	_, err := s.svc.DeleteObject(p)
-	return err
-}
-
-func (s *S3Storage) Get(path string) (io.ReadCloser, error) {
-	path = filepath.Join(s.BaseDir, path)
-
-	p := &s3.GetObjectInput{
-		Bucket: aws.String(s.Bucket),
-		Key:    aws.String(path),
-	}
-
-	r, err := s.svc.GetObject(p)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Body, nil
-}
-
-func (s *S3Storage) List(dir string) ([]string, error) {
-	dir = filepath.Join(s.BaseDir, dir)
-
-	p := &s3.ListObjectsV2Input{
-		Bucket: aws.String(s.Bucket),
-		Prefix: aws.String(dir),
-	}
-
-	r, err := s.svc.ListObjectsV2(p)
-	if err != nil {
-		return nil, err
-	}
-
-	var names []string
-
-	for _, o := range r.Contents {
-		names = append(names, *o.Key)
-	}
-
-	return names, nil
+	return s.Bucket, path, err
 }
 
 func (s *S3Storage) Auth() error {

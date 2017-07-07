@@ -1,6 +1,13 @@
 version: "2"
 
 services:
+  nats:
+    images: nats
+    restart: always
+    ports:
+      - 4222:4222
+      - 8222:8222
+
   sqlagent:
     image: dbhi/sql-agent
     restart: always

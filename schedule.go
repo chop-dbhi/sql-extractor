@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	nats "github.com/nats-io/go-nats"
 )
 
 const DirPerm = 0775
@@ -29,6 +31,14 @@ var (
 
 	ErrMaxRetriesReached = errors.New("exceeded retry limit")
 )
+
+type PutEvent struct {
+	Bucket       string `json:"bucket"`
+	Key          string `json:"key"`
+	ScheduleTime int64  `json:"schedule_time"`
+	StartTime    int64  `json:"start_time"`
+	EndTime      int64  `json:"end_time"`
+}
 
 // TryFunc represents functions that can be retried.
 type TryFunc func(attempt int) (retry bool, err error)
@@ -57,7 +67,7 @@ func Try(max int, fn TryFunc) error {
 	return err
 }
 
-func Schedule(cxt context.Context, config *Config, queries []*Query) error {
+func Schedule(cxt context.Context, nc *nats.Conn, config *Config, queries []*Query) error {
 	w := config.Workers
 
 	if w == 0 {
@@ -118,9 +128,25 @@ func Schedule(cxt context.Context, config *Config, queries []*Query) error {
 							if err != nil {
 								log.Printf("Error opening file %s", cacheFile)
 							} else {
-								if err := config.S3.Put(outFile, f); err != nil {
+								bucket, key, err := config.S3.Put(outFile, f)
+								if err != nil {
 									log.Printf("Error sending %s to S3: %s", outFile, err)
+								} else if nc != nil {
+									data, err := json.Marshal(&PutEvent{
+										Bucket:       bucket,
+										Key:          key,
+										ScheduleTime: now.Unix(),
+										StartTime:    q.ExecuteTime.Unix(),
+										EndTime:      q.CompleteTime.Unix(),
+									})
+									if err != nil {
+										panic(err)
+									}
+									if err := nc.Publish(config.NATS.Topic, data); err != nil {
+										log.Printf("failed to publish message to nats: %s", err)
+									}
 								}
+
 								f.Close()
 
 								if config.Cache.Purge {

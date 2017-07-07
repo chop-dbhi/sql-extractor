@@ -98,6 +98,11 @@ type Config struct {
 		Addr string
 	}
 
+	NATS struct {
+		URL   string
+		Topic string
+	}
+
 	// Set of query configurations.
 	Queries []*QueryConfig
 

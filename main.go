@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	nats "github.com/nats-io/go-nats"
 	"github.com/robfig/cron"
 )
 
@@ -31,6 +32,14 @@ func main() {
 	if len(queries) == 0 {
 		log.Print("No queries found.")
 		return
+	}
+
+	var nc *nats.Conn
+	if config.NATS.URL != "" {
+		nc, err = nats.Connect(config.NATS.URL)
+		if err != nil {
+			log.Fatalf("error connecting to nats: %s", err)
+		}
 	}
 
 	log.Printf("Found %d queries.", len(queries))
@@ -59,7 +68,7 @@ func main() {
 	// No schedule, one-off invocation.
 	if config.Schedule.Cron == "" {
 		log.Printf("No schedule specified, running one extract")
-		if err := Schedule(cxt, config, queries); err != nil {
+		if err := Schedule(cxt, nc, config, queries); err != nil {
 			log.Print(err)
 		}
 		done()
@@ -73,7 +82,7 @@ func main() {
 
 			c := cron.NewWithLocation(time.Local)
 			c.AddFunc(config.Schedule.Cron, func() {
-				Schedule(cxt, config, queries)
+				Schedule(cxt, nc, config, queries)
 			})
 			c.Start()
 

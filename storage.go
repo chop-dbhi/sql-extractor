@@ -1,8 +1,9 @@
-package main
+package sqlextractor
 
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -34,6 +35,29 @@ func (s *S3Storage) Put(path string, r io.ReadSeeker) (string, string, error) {
 
 	// TODO: log response?
 	_, err := s.svc.PutObject(p)
+	return s.Bucket, path, err
+}
+
+func (s *S3Storage) PutFile(path string, fname string) (string, string, error) {
+	path = filepath.Join(s.BaseDir, path)
+
+	f, err := os.Open(fname)
+	if err != nil {
+		return s.Bucket, path, err
+	}
+	defer f.Close()
+
+	encrypt := "AES256"
+
+	p := &s3.PutObjectInput{
+		Bucket:               aws.String(s.Bucket),
+		Key:                  aws.String(path),
+		Body:                 f,
+		ServerSideEncryption: &encrypt,
+	}
+
+	// TODO: log response?
+	_, err = s.svc.PutObject(p)
 	return s.Bucket, path, err
 }
 

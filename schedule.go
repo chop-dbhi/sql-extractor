@@ -1,4 +1,4 @@
-package main
+package sqlextractor
 
 import (
 	"bytes"
@@ -6,11 +6,9 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -19,55 +17,18 @@ import (
 	"sync"
 	"time"
 
-	nats "github.com/nats-io/go-nats"
+	"github.com/chop-dbhi/sql-extractor/events"
+	"github.com/nats-io/nuid"
 )
 
 const DirPerm = 0775
 
 var (
 	CacheDirTimeFormat = "2006/01/02/15-04-05"
-
-	RetryAttempts = 5
-
-	ErrMaxRetriesReached = errors.New("exceeded retry limit")
+	RetryAttempts      = 5
 )
 
-type PutEvent struct {
-	Bucket       string `json:"bucket"`
-	Key          string `json:"key"`
-	ScheduleTime int64  `json:"schedule_time"`
-	StartTime    int64  `json:"start_time"`
-	EndTime      int64  `json:"end_time"`
-}
-
-// TryFunc represents functions that can be retried.
-type TryFunc func(attempt int) (retry bool, err error)
-
-// Do keeps trying the function until the second argument
-// returns false, or no error is returned.
-func Try(max int, fn TryFunc) error {
-	var (
-		err     error
-		retry   bool
-		attempt int
-	)
-
-	for {
-		retry, err = fn(attempt)
-		if !retry || err == nil {
-			break
-		}
-
-		attempt++
-		if attempt > max {
-			return ErrMaxRetriesReached
-		}
-	}
-
-	return err
-}
-
-func Schedule(cxt context.Context, nc *nats.Conn, config *Config, queries []*Query) error {
+func Execute(cxt context.Context, pub *events.Publisher, config *Config, queries []*Query) error {
 	w := config.Workers
 
 	if w == 0 {
@@ -88,6 +49,12 @@ func Schedule(cxt context.Context, nc *nats.Conn, config *Config, queries []*Que
 		return err
 	}
 
+	// Correlation ID for this batch.
+	corrId := nuid.Next()
+
+	// Batch started.
+	pub.Publish(config.NATS.Topic, corrId, &BatchStarted{})
+
 	queue := make(chan *Query, w*2)
 
 	for i := 0; i < w; i++ {
@@ -95,70 +62,72 @@ func Schedule(cxt context.Context, nc *nats.Conn, config *Config, queries []*Que
 			for {
 				select {
 				case <-cxt.Done():
-					log.Printf("Stopping worker %d", id)
 					return
 
 				case q, ok := <-queue:
 					if !ok {
-						log.Printf("Stopping worker %d", id)
 						return
 					}
+
+					var errString string
 
 					// File to write to.
 					ext := fmt.Sprintf("%s.gz", config.Format)
 					outFile := fmt.Sprintf("%s.%s", filepath.Join(timePath, q.Name), ext)
 					cacheFile := filepath.Join(config.Cache.Path, outFile)
 
-					log.Printf("Executing %s...", q.Name)
-					q.ExecuteTime = time.Now()
+					// Extract started.
+					pub.Publish(config.NATS.Topic, corrId, &ExtractStarted{
+						Query: q.Name,
+					})
 
-					n, err := QueryAndWrite(cxt, config, q, cacheFile)
-					q.CompleteTime = time.Now()
-
+					// Execute and cache the query.
+					startTime := time.Now()
+					n, err := queryAndWrite(cxt, config, q, cacheFile)
 					if err != nil {
-						log.Printf("Error with %s: %s", q.Name, err)
-					} else {
-						log.Printf("Finished %s (%d bytes in %s)", q.Name, n, q.CompleteTime.Sub(q.ExecuteTime))
-
-						if config.S3 != nil {
-							// Send to S3.
-							log.Printf("Sending %s to S3...", cacheFile)
-
-							f, err := os.Open(cacheFile)
-							if err != nil {
-								log.Printf("Error opening file %s", cacheFile)
-							} else {
-								bucket, key, err := config.S3.Put(outFile, f)
-								if err != nil {
-									log.Printf("Error sending %s to S3: %s", outFile, err)
-								} else if nc != nil {
-									data, err := json.Marshal(&PutEvent{
-										Bucket:       bucket,
-										Key:          key,
-										ScheduleTime: now.Unix(),
-										StartTime:    q.ExecuteTime.Unix(),
-										EndTime:      q.CompleteTime.Unix(),
-									})
-									if err != nil {
-										panic(err)
-									}
-									if err := nc.Publish(config.NATS.Topic, data); err != nil {
-										log.Printf("failed to publish message to nats: %s", err)
-									}
-								}
-
-								f.Close()
-
-								if config.Cache.Purge {
-									if err := os.Remove(cacheFile); err != nil {
-										log.Printf("Error removing cache %s: %s", cacheFile, err)
-									}
-								}
-							}
-						}
+						errString = err.Error()
 					}
 
-					// Query done.
+					// Extract ended.
+					pub.Publish(config.NATS.Topic, corrId, &ExtractEnded{
+						Query:    q.Name,
+						Bytes:    n,
+						Duration: time.Since(startTime),
+						Error:    errString,
+					})
+
+					// Error or no upload, break early.
+					if err != nil || config.S3 == nil {
+						wg.Done()
+						break
+					}
+
+					// Extract upload started.
+					pub.Publish(config.NATS.Topic, corrId, &ExtractUploadStarted{
+						Query: q.Name,
+					})
+
+					// Send to S3.
+					bucket, key, err := config.S3.PutFile(outFile, cacheFile)
+
+					errString = ""
+					if err != nil {
+						errString = err.Error()
+					}
+
+					// Extract upload ended.
+					pub.Publish(config.NATS.Topic, corrId, &ExtractUploadEnded{
+						Query:  q.Name,
+						Bucket: bucket,
+						Key:    key,
+						Error:  errString,
+					})
+
+					// Purge cache file.
+					if config.Cache.Purge {
+						os.Remove(cacheFile)
+					}
+
 					wg.Done()
 				}
 			}
@@ -174,18 +143,18 @@ func Schedule(cxt context.Context, nc *nats.Conn, config *Config, queries []*Que
 	close(queue)
 
 	wg.Wait()
-	log.Print("done")
 
-	if config.S3 != nil && config.Cache.Purge {
-		if err := os.RemoveAll(cacheDir); err != nil {
-			log.Printf("Error removing cache directory %s: %s", cacheDir, err)
-		}
+	// Batch ended.
+	pub.Publish(config.NATS.Topic, corrId, &BatchEnded{})
+
+	if config.Cache.Purge {
+		os.RemoveAll(cacheDir)
 	}
 
 	return nil
 }
 
-func SendRequest(cxt context.Context, config *Config, q *Query) (io.ReadCloser, error) {
+func sendRequest(cxt context.Context, config *Config, q *Query) (io.ReadCloser, error) {
 	sql := strings.TrimSpace(q.SQL)
 	sql = strings.TrimSuffix(sql, ";")
 
@@ -211,7 +180,7 @@ func SendRequest(cxt context.Context, config *Config, q *Query) (io.ReadCloser, 
 	var resp *http.Response
 
 	// Try up to 5 times in case of a network error.
-	err = Try(RetryAttempts, func(attempt int) (bool, error) {
+	err = try(RetryAttempts, func(attempt int) (bool, error) {
 		var err error
 		resp, err = http.DefaultClient.Do(req)
 		if err != nil {
@@ -242,8 +211,8 @@ func SendRequest(cxt context.Context, config *Config, q *Query) (io.ReadCloser, 
 	return resp.Body, nil
 }
 
-func QueryAndWrite(cxt context.Context, config *Config, q *Query, outFile string) (int64, error) {
-	rc, err := SendRequest(cxt, config, q)
+func queryAndWrite(cxt context.Context, config *Config, q *Query, outFile string) (int64, error) {
+	rc, err := sendRequest(cxt, config, q)
 	if err != nil {
 		return 0, err
 	}

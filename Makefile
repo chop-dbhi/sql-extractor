@@ -5,11 +5,12 @@ GIT_SHA := $(or $(shell git log -1 --pretty=format:"%h" .), "latest")
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
 GIT_BRANCH := $(shell git symbolic-ref -q --short HEAD)
 
-dist:
-	mkdir -p dist
+build:
+	go build -o $(GOPATH)/bin/$(PROG_NAME) ./cmd/sql-extractor
 
+dist:
 	GOOS=linux GOARCH=amd64 go build \
-			 -o ./dist/linux-amd64/$(PROG_NAME) .
+			 -o ./dist/linux-amd64/$(PROG_NAME) ./cmd/sql-extractor
 
 docker:
 	docker build -t ${IMAGE_NAME}:${GIT_SHA} .

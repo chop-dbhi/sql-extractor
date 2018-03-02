@@ -21,7 +21,7 @@ func (p *Publisher) log(err error, topic string, data []byte) {
 		"topic": topic,
 		"data":  json.RawMessage(data),
 	})
-	p.Logger.Print(b)
+	p.Logger.Print(string(b))
 }
 
 // publishEvent publishes or logs the event.
